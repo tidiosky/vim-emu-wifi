@@ -89,7 +89,7 @@
      pip: name=requests state=latest executable={{pip_path.stdout}}
 
    - name: install docker
-     pip: name=docker version=2.0.2 executable={{pip_path.stdout}}
+     pip: name=docker version=4.4.1 executable={{pip_path.stdout}}
 
    - name: install prometheus_client
      pip: name=prometheus_client state=latest executable={{pip_path.stdout}}
