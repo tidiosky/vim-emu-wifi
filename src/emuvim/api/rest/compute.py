@@ -23,6 +23,10 @@
 # the Horizon 2020 and 5G-PPP programmes. The authors would like to
 # acknowledge the contributions of their colleagues of the SONATA
 # partner consortium (www.sonata-nfv.eu).
+#
+# Forked and edited on 05-06/2022 to implement more functions by Gustave
+# Eiffel University under EU 5GRail Project
+import os
 import logging
 from flask_restful import Resource
 from flask import request
@@ -46,6 +50,7 @@ class Compute(Resource):
     :param command: command to execute
     :param network: list of all interface of the vnf, with their parameters (id=id1,ip=x.x.x.x/x),...
     example networks list({"id":"input","ip": "10.0.0.254/8"}, {"id":"output","ip": "11.0.0.254/24"})
+    :param volume: volume to mount with the vnf
     :return: docker inspect dict of deployed docker
     """
 
@@ -65,6 +70,13 @@ class Compute(Resource):
         nw_list = self._parse_network(network)
         image = data.get("image")
         command = data.get("docker_command")
+        environment = data.get("environment")
+        volume = data.get("volume")
+        cpu_period = data.get("cpu_period")
+        cpu_quota = data.get("cpu_quota")
+        mem_limit = data.get("mem_limit")
+        # keys = ['volume, cpu_percent']
+        # properties = dict.fromkeys(keys, "")
 
         try:
             if compute_name is None or compute_name == "None":
@@ -73,8 +85,24 @@ class Compute(Resource):
             if dc_label is None or dcs.get(dc_label) is None:
                 logging.error("No datacenter defined in request.")
                 return "No datacenter defined in request.", 500, CORS_HEADER
-            c = dcs.get(dc_label).startCompute(
-                compute_name, image=image, command=command, network=nw_list)
+
+            if environment == False :
+                c = dcs.get(dc_label).startComputeR(
+                    compute_name, image=image, command=command, network=nw_list, volume=volume,
+                    cpu_period=cpu_period, cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
+            else:
+                IPERF_SERVER = os.getenv("IPERF_SERVER")
+                IPERF_PORT = os.getenv("IPERF_PORT")
+                DB_SERVER = os.getenv("DB_SERVER")
+                keys = ["IPERF_SERVER","IPERF_PORT","DB_SERVER"]
+                properties = dict.fromkeys(keys,"")
+                properties["IPERF_SERVER"] = IPERF_SERVER
+                properties["IPERF_PORT"]=IPERF_PORT
+                properties["DB_SERVER"]= DB_SERVER
+
+                c = dcs.get(dc_label).startComputeR(
+                    compute_name, image=image, command=command, network=nw_list, volume=volume,
+                    cpu_period=cpu_period, cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
             # (if available) trigger emu. entry point given in Dockerfile
             try:
                 config = c.dcinfo.get("Config", dict())

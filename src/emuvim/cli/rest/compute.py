@@ -23,6 +23,10 @@
 # the Horizon 2020 and 5G-PPP programmes. The authors would like to
 # acknowledge the contributions of their colleagues of the SONATA
 # partner consortium (www.sonata-nfv.eu).
+
+# Forked and edited on 05-06/2022 to implement more functions by Gustave
+# Eiffel University under EU 5GRail Project
+
 from requests import get, put, delete
 from tabulate import tabulate
 import pprint
@@ -47,7 +51,12 @@ class RestApiClient():
 
         req = {'image': args.get("image"),
                'command': args.get("docker_command"),
-               'network': args.get("network")}
+               'network': args.get("network"),
+               'environment': args.get("environment"),
+               'volume': args.get("volume"),
+               'cpu_period': args.get("cpu_period"),
+               'cpu_quota': args.get("cpu_quota"),
+               'mem_limit': args.get("mem_limit")}
 
         response = put("%s/restapi/compute/%s/%s" %
                        (args.get("endpoint"),
@@ -115,6 +124,7 @@ parser = argparse.ArgumentParser(description="""son-emu-cli compute
 
     Examples:
     - son-emu-cli compute start -d dc2 -n client -i sonatanfv/sonata-iperf3-vnf
+    - son-emu-cli compute start -d dc1 -n client -i sonatanfv/sonata-iperf3-vnf -v /home/wifi/db:/db
     - son-emu-cli list
     - son-emu-cli compute status -d dc2 -n client
     """, formatter_class=argparse.RawTextHelpFormatter)
@@ -139,6 +149,9 @@ parser.add_argument(
     "--dcmd", "-c", dest="docker_command",
     help="Startup command of the container e.g. './start.sh'")
 parser.add_argument(
+    "--cpu-percent","-cpu", dest="cpu_percent"
+)
+parser.add_argument(
     "--net", dest="network",
     help="Network properties of a compute instance e.g. \
           '(id=input,ip=10.0.10.3/24),(id=output,ip=10.0.10.4/24)' for multiple interfaces.")
@@ -147,6 +160,34 @@ parser.add_argument(
     default="http://127.0.0.1:5001",
     help="REST API endpoint of son-emu (default:http://127.0.0.1:5001)")
 
+parser.add_argument(
+    "--environment",'-env', dest="environment",
+    default="False",
+    help="Host environment variable to use inside vnfs, e.g., IPERF_SERVER, IPERF_PORT and DB_SERVER.")
+
+parser.add_argument(
+    "--volume", "-v", dest="volume",
+    default="",
+    help="Docker volume to use within container using docker -v option"
+)
+
+parser.add_argument(
+    "--cpu-period", "-cpu-p", dest="cpu_period",
+    default="",
+    help="Specify the CPU CFS scheduler period, which is used alongside --cpu-quota. Defaults to 100000 microseconds (100 milliseconds)."
+)
+
+parser.add_argument(
+    "--cpu_quota", "-cpu-q", dest="cpu_quota",
+    default="",
+    help="Impose a CPU CFS quota on the container. The number of microseconds per --cpu-period that the container is limited to before throttled. "
+)
+
+parser.add_argument(
+    "--mem-limit", "-mem", dest="mem_limit",
+    default="",
+    help="The maximum amount of memory the container can use."
+)
 
 def main(argv):
     args = vars(parser.parse_args(argv))

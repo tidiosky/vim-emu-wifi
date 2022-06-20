@@ -23,6 +23,9 @@
 # the Horizon 2020 and 5G-PPP programmes. The authors would like to
 # acknowledge the contributions of their colleagues of the SONATA
 # partner consortium (www.sonata-nfv.eu).
+
+# Forked and edited on 05-06/2022 to implement more functions by Gustave
+# Eiffel University under EU 5GRail Project
 from mininet.node import Docker
 from mininet.link import Link
 from emuvim.dcemulator.resourcemodel import NotEnoughResourcesAvailable
@@ -222,6 +225,91 @@ class Datacenter(object):
     def start(self):
         pass
 
+    def startComputeR(self, name, image=None, command=None, network=None, volume=None, cpu_period=None, cpu_quota=-1, mem_limit=None,
+                     flavor_name="tiny", properties=dict(), **params):
+        """
+        Create a new container as compute resource and connect it to this
+        data center.
+        :param name: name (string)
+        :param image: image name (string)
+        :param command: command (string)
+        :param network: networks list({"ip": "10.0.0.254/8"}, {"ip": "11.0.0.254/24"})
+        :param volume: docker volume
+        :param cpu_period: cpu_period allocated to container
+        :param cpu_quota: cpu_quota over the cpu_period
+        :param mem_limit : limiting container memory
+        :param flavor_name: name of the flavor for this compute container
+        :param properties: dictionary of properties (key-value) that will be passed as environment variables
+        :return:
+        """
+        assert name is not None
+        default_net = {"id": "emu0"}
+        # no duplications
+        if name in [c.name for c in self.net.getAllContainers()]:
+            raise Exception("Container with name %s already exists." % name)
+        # set default parameter
+        if image is None:
+            image = "ubuntu:trusty"
+        if network is None:
+            network = {}
+        if isinstance(network, dict):
+            if len(network) < 1:
+                # create at least one default interface
+                network = default_net
+            # if we have only one network, put it in a list
+            network = [network]
+        if isinstance(network, list):
+            if len(network) < 1:
+                # create at least one default interface
+                network.append(default_net)
+
+        env = properties
+        properties['VNF_NAME'] = name
+        # create the container
+        d = self.net.addDocker(
+            str(name),
+            dimage=image,
+            dcmd=command,
+            datacenter=self,
+            flavor_name=flavor_name,
+            environment=env,
+            cpu_period=int(cpu_period),
+            cpu_quota=int(cpu_quota),
+            mem_limit=mem_limit,
+            volumes=[volume],
+            **params
+        )
+
+        # apply resource limits to container if a resource model is defined
+        if self._resource_model is not None:
+            try:
+                self._resource_model.allocate(d)
+                self._resource_model.write_allocation_log(
+                    d, self.resource_log_path)
+            except NotEnoughResourcesAvailable as ex:
+                LOG.warning(
+                    "Allocation of container %r was blocked by resource model." % name)
+                LOG.info(ex.message)
+                # ensure that we remove the container
+                self.net.removeDocker(name)
+                return None
+
+        # connect all given networks
+        # if no --net option is given, network = [{}], so 1 empty dict in the list
+        # this results in 1 default interface with a default ip address
+        for nw in network:
+            # clean up network configuration (e.g. RTNETLINK does not allow ':'
+            # in intf names
+            if nw.get("id") is not None:
+                nw["id"] = self._clean_ifname(nw["id"])
+            # TODO we cannot use TCLink here (see:
+            # https://github.com/mpeuster/containernet/issues/3)
+            self.net.addLink(d, self.switch, params1=nw,
+                             cls=Link, intfName1=nw.get('id'))
+        # do bookkeeping
+        self.containers[name] = d
+        return d  # we might use UUIDs for naming later on
+
     def startCompute(self, name, image=None, command=None, network=None,
                      flavor_name="tiny", properties=dict(), **params):
         """
@@ -272,6 +360,7 @@ class Datacenter(object):
             datacenter=self,
             flavor_name=flavor_name,
             environment=env,
+            volumes=[volume],
             **params
         )
 

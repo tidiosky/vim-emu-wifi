@@ -32,9 +32,10 @@ import json
 import networkx as nx
 from subprocess import Popen
 # from gevent import monkey
-from mininet.net import Containernet
+from mininet.net import ContainernetWifi
+#from containernet.net import ContainernetWifi
 from mininet.node import OVSSwitch, OVSKernelSwitch, Docker, RemoteController
-from mininet.cli import CLI
+from mn_wifi.cli import CLI
 from mininet.link import TCLink
 from mininet.clean import cleanup
 from emuvim.dcemulator.monitoring import DCNetworkMonitor
@@ -56,8 +57,9 @@ DEFAULT_PRIORITY = 1000
 # default cookie number for new flow-rules
 DEFAULT_COOKIE = 10
 
+SAP_PREFIX = 'sap.'
 
-class DCNetwork(Containernet):
+class DCNetwork(ContainernetWifi):
     """
     Wraps the original Mininet/Containernet class and provides
     methods to add data centers, switches, etc.
@@ -94,7 +96,7 @@ class DCNetwork(Containernet):
         cleanup()
 
         # call original Docker.__init__ and setup default controller
-        Containernet.__init__(
+        ContainernetWifi.__init__(
             self, switch=OVSKernelSwitch, controller=controller, **kwargs)
 
         # default switch configuration
@@ -105,10 +107,10 @@ class DCNetwork(Containernet):
         else:
             self.failMode = 'secure'
 
-        # Ryu management
-        if controller == RemoteController:
-            # start Ryu controller
-            self.startRyu(learning_switch=enable_ryu_learning)
+        # # Ryu management
+        # if controller == RemoteController:
+        #     # start Ryu controller
+        #     self.startRyu(learning_switch=enable_ryu_learning)
 
         # add the specified controller
         self.addController('c0', controller=controller)
@@ -119,11 +121,11 @@ class DCNetwork(Containernet):
         # initialize pool of vlan tags to setup the SDN paths
         self.vlans = list(range(1, 4095))[::-1]
 
-        # link to Ryu REST_API
-        ryu_ip = 'localhost'
-        ryu_port = '8080'
-        self.ryu_REST_api = 'http://{0}:{1}'.format(ryu_ip, ryu_port)
-        self.RyuSession = requests.Session()
+        # # link to Ryu REST_API
+        # ryu_ip = 'localhost'
+        # ryu_port = '8080'
+        # self.ryu_REST_api = 'http://{0}:{1}'.format(ryu_ip, ryu_port)
+        # self.RyuSession = requests.Session()
 
         # monitoring agent
         if monitor:
@@ -188,7 +190,7 @@ class DCNetwork(Containernet):
         if "cls" not in params:
             params["cls"] = TCLink
 
-        link = Containernet.addLink(self, node1, node2, **params)
+        link = ContainernetWifi.addLink(self, node1, node2, **params)
 
         # try to give container interfaces a default id
         node1_port_id = node1.ports[link.intf1]
@@ -250,7 +252,7 @@ class DCNetwork(Containernet):
             node2 = link.intf2.node
         assert node1 is not None
         assert node2 is not None
-        Containernet.removeLink(self, link=link, node1=node1, node2=node2)
+        ContainernetWifi.removeLink(self, link=link, node1=node1, node2=node2)
         # TODO we might decrease the loglevel to debug:
         try:
             self.DCNetwork_graph.remove_edge(node2.name, node1.name)
@@ -268,7 +270,7 @@ class DCNetwork(Containernet):
         Wrapper for addDocker method to use custom container class.
         """
         self.DCNetwork_graph.add_node(label, type=params.get('type', 'docker'))
-        return Containernet.addDocker(
+        return ContainernetWifi.addDocker(
             self, label, cls=EmulatorCompute, **params)
 
     def removeDocker(self, label, **params):
@@ -276,7 +278,7 @@ class DCNetwork(Containernet):
         Wrapper for removeDocker method to update graph.
         """
         self.DCNetwork_graph.remove_node(label)
-        return Containernet.removeDocker(self, label, **params)
+        return ContainernetWifi.removeDocker(self, label, **params)
 
     def addExtSAP(self, sap_name, sap_ip, **params):
         """
@@ -285,14 +287,14 @@ class DCNetwork(Containernet):
         # make sure that 'type' is set
         params['type'] = params.get('type', 'sap_ext')
         self.DCNetwork_graph.add_node(sap_name, type=params['type'])
-        return Containernet.addExtSAP(self, sap_name, sap_ip, **params)
+        return ContainernetWifi.addExtSAP(self, sap_name, sap_ip, **params)
 
     def removeExtSAP(self, sap_name, **params):
         """
         Wrapper for removeExtSAP method to remove SAP  also from graph.
         """
         self.DCNetwork_graph.remove_node(sap_name)
-        return Containernet.removeExtSAP(self, sap_name)
+        return ContainernetWifi.removeExtSAP(self, sap_name)
 
     def addSwitch(self, name, add_to_graph=True, **params):
         """
@@ -310,7 +312,7 @@ class DCNetwork(Containernet):
         else:
             failMode = self.failMode
 
-        s = Containernet.addSwitch(
+        s = ContainernetWifi.addSwitch(
             self, name, protocols='OpenFlow10,OpenFlow12,OpenFlow13', failMode=failMode, **params)
 
         return s
@@ -328,7 +330,7 @@ class DCNetwork(Containernet):
         # start
         for dc in self.dcs.values():
             dc.start()
-        Containernet.start(self)
+        ContainernetWifi.start(self)
 
     def stop(self):
 
@@ -337,7 +339,7 @@ class DCNetwork(Containernet):
             self.monitor_agent.stop()
 
         # stop emulator net
-        Containernet.stop(self)
+        ContainernetWifi.stop(self)
 
         # stop Ryu controller
         self.killRyu()
