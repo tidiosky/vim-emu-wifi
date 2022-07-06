@@ -66,73 +66,135 @@ class Compute(Resource):
         elif not isinstance(data, dict):
             data = json.loads(request.json)
 
-        network = data.get("network")
-        nw_list = self._parse_network(network)
-        image = data.get("image")
-        command = data.get("docker_command")
-        environment = data.get("environment")
-        volume = data.get("volume")
-        cpu_period = data.get("cpu_period")
-        cpu_quota = data.get("cpu_quota")
-        mem_limit = data.get("mem_limit")
-        # keys = ['volume, cpu_percent']
-        # properties = dict.fromkeys(keys, "")
+        next_dc = data.get("destination")
 
-        try:
-            if compute_name is None or compute_name == "None":
-                logging.error("No compute name defined in request.")
-                return "No compute name defined in request.", 500, CORS_HEADER
-            if dc_label is None or dcs.get(dc_label) is None:
-                logging.error("No datacenter defined in request.")
-                return "No datacenter defined in request.", 500, CORS_HEADER
+        #print("Destination datacenter : "+dest_datacenter)
 
-            if environment == False :
-                c = dcs.get(dc_label).startComputeR(
-                    compute_name, image=image, command=command, network=nw_list, volume=volume,
-                    cpu_period=cpu_period, cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
-            else:
-                IPERF_SERVER = os.getenv("IPERF_SERVER")
-                IPERF_PORT = os.getenv("IPERF_PORT")
-                DB_SERVER = os.getenv("DB_SERVER")
-                keys = ["IPERF_SERVER","IPERF_PORT","DB_SERVER"]
-                properties = dict.fromkeys(keys,"")
-                properties["IPERF_SERVER"] = IPERF_SERVER
-                properties["IPERF_PORT"]=IPERF_PORT
-                properties["DB_SERVER"]= DB_SERVER
+        if next_dc is None:
 
-                c = dcs.get(dc_label).startComputeR(
-                    compute_name, image=image, command=command, network=nw_list, volume=volume,
-                    cpu_period=cpu_period, cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
-            # (if available) trigger emu. entry point given in Dockerfile
+            network = data.get("network")
+            nw_list = self._parse_network(network)
+            image = data.get("image")
+            command = data.get("docker_command")
+            environment = data.get("environment")
+            volume = data.get("volume")
+            cpu_period = data.get("cpu_period")
+            cpu_quota = data.get("cpu_quota")
+            mem_limit = data.get("mem_limit")
+            # keys = ['volume, cpu_percent']
+            # properties = dict.fromkeys(keys, "")
+
             try:
-                config = c.dcinfo.get("Config", dict())
-                env = config.get("Env", list())
-                legacy_command_execution = False
-                for env_var in env:
-                    var, cmd = map(str.strip, map(str, env_var.split('=', 1)))
-                    logging.debug("%r = %r" % (var, cmd))
-                    if var == "SON_EMU_CMD" or var == "VIM_EMU_CMD":
-                        logging.info("Executing script in '{}': {}={}"
-                                     .format(compute_name, var, cmd))
-                        # execute command in new thread to ensure that API is
-                        # not blocked by VNF
-                        t = threading.Thread(target=c.cmdPrint, args=(cmd,))
-                        t.daemon = True
-                        t.start()
-                        legacy_command_execution = True
-                        break
-                if not legacy_command_execution:
-                    c.start()
+                if compute_name is None or compute_name == "None":
+                    logging.error("No compute name defined in request.")
+                    return "No compute name defined in request.", 500, CORS_HEADER
+                if dc_label is None or dcs.get(dc_label) is None:
+                    logging.error("No datacenter defined in request.")
+                    return "No datacenter defined in request.", 500, CORS_HEADER
+
+                if environment == False :
+                    SERVER= os.getenv("SERVER")
+                    PORT = os.getenv("PORT")
+                    keys = ["SERVER", "PORT"]
+                    properties = dict.fromkeys(keys, "")
+                    properties["SERVER"] = SERVER
+                    properties["PORT"] = PORT
+                    c = dcs.get(dc_label).startComputeR(
+                        compute_name, image=image, command=command, network=nw_list, volume=volume,
+                        cpu_period=cpu_period, cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
+                else:
+                    SERVER= os.getenv("SERVER")
+                    PORT = os.getenv("PORT")
+                    keys = ["SERVER", "PORT"]
+                    properties = dict.fromkeys(keys, "")
+                    properties["SERVER"] = SERVER
+                    properties["PORT"] = PORT
+
+                    c = dcs.get(dc_label).startComputeR(
+                        compute_name, image=image, command=command, network=nw_list, volume=volume,
+                        cpu_period=cpu_period, cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
+                # (if available) trigger emu. entry point given in Dockerfile
+                try:
+                    config = c.dcinfo.get("Config", dict())
+                    env = config.get("Env", list())
+                    legacy_command_execution = False
+                    for env_var in env:
+                        var, cmd = map(str.strip, map(str, env_var.split('=', 1)))
+                        logging.debug("%r = %r" % (var, cmd))
+                        if var == "SON_EMU_CMD" or var == "VIM_EMU_CMD" :
+                            logging.info("Executing script in '{}': {}={}"
+                                        .format(compute_name, var, cmd))
+                            # execute command in new thread to ensure that API is
+                            # not blocked by VNF
+                            t = threading.Thread(target=c.cmdPrint, args=(cmd,))
+                            t.daemon = True
+                            t.start()
+                            legacy_command_execution = True
+                            break
+                    if not legacy_command_execution:
+                        c.start()
+                except Exception as ex:
+                    logging.warning("Couldn't run Docker entry point VIM_EMU_CMD")
+                    logging.exception(
+                        "Exception: " + str(ex) + "; " + str(type(ex))
+                    )
+                # return docker inspect dict
+                return c.getStatus(), 200, CORS_HEADER
             except Exception as ex:
-                logging.warning("Couldn't run Docker entry point VIM_EMU_CMD")
-                logging.exception(
-                    "Exception: " + str(ex) + "; " + str(type(ex))
-                )
-            # return docker inspect dict
-            return c.getStatus(), 200, CORS_HEADER
-        except Exception as ex:
-            logging.exception("API error.")
-            return ex.message, 500, CORS_HEADER
+                logging.exception("API error.")
+                return ex.message, 500, CORS_HEADER
+        else :
+            logging.debug("API CALL: move compute")
+#            import pdb
+            #pdb.set_trace()
+            try:
+                current_compute_status = dcs.get(dc_label).containers.get(compute_name).getStatus()
+                print("Current compute status : \n")
+                print(current_compute_status)
+                #'ip','netmask','mac'
+                # inftname = [netw_dict['intf_name']
+                #                     for netw_dict in current_compute_status.get("network")]
+                ip = [netw_dict['ip']
+                                    for netw_dict in current_compute_status.get("network")]
+                # netmask = [netw_dict['netmask']
+                #                     for netw_dict in current_compute_status.get("network")]
+                # mac = [netw_dict['mac']
+                #                     for netw_dict in current_compute_status.get("network")]
+                mac = [netw_dict['mac']
+                                    for netw_dict in current_compute_status.get("network")]
+                netw_list = list(dict())
+                netw_list.append({'ip':ip[0]})
+            
+                print("Current compute network list : \n")
+                print(netw_list)
+                # for c in list:
+                #     # for each container add a line to the output table
+                #     if len(c) > 1:
+                #         name = c[0]
+                #         status = c[1]
+                #         # eth0ip = status.get("docker_network", "-")
+                        
+                #computeList = dcs.get(dc_label).containers.get(compute_name).getStatus()
+                print(dc_label+" ctx before moving \n")
+                print(dcs.get(dc_label).containers)
+                print(next_dc+" ctx before moving \n")
+                print(dcs.get(next_dc).containers)
+
+                dcs.get(dc_label).moveCompute(compute_name, dcs.get(next_dc), netw_list)
+                
+                #c = dcs.get(next_dc).containers.get(compute_name)
+                print(dc_label+" ctx after moving \n")
+                print(dcs.get(dc_label).containers)
+                print(next_dc+" ctx after moving \n")
+                print(dcs.get(next_dc).containers)
+                dcs.get(next_dc).net.buildGraph()
+                c = dcs.get(next_dc).containers.get(compute_name)
+                print("Compute updated information : \n")
+                print(c.getStatus())
+                return c.getStatus(), 200, CORS_HEADER
+            except Exception as ex:
+                logging.exception("API error while moving compute")
+                return ex.message, 500, CORS_HEADER
 
     def get(self, dc_label, compute_name):
 

@@ -153,11 +153,12 @@ class RestApiEndpoint(object):
             self.http_server.close()
 
     def _start_flask(self):
-        # self.app.run(self.ip, self.port, debug=False, use_reloader=False)
+        self.app.run(self.ip, self.port, debug=False, use_reloader=False)
         # this should be a more production-fit http-server
         # self.app.logger.setLevel(logging.ERROR)
         self.http_server = WSGIServer((self.ip, self.port),
                                       self.app,
+                                      
                                       # This disables HTTP request logs to not
                                       # mess up the CLI when e.g. the
                                       # auto-updated dashboard is used

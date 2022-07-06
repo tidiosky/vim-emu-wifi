@@ -31,22 +31,22 @@
      apt: update_cache=yes
      
    - name: install python3-dev
-     apt: pkg=python3-dev state=installed
+     apt: pkg=python3-dev state=latest
 
    - name: install libffi-dev
-     apt: pkg=libffi-dev state=installed
+     apt: pkg=libffi-dev state=latest
 
    - name: install libssl-dev
-     apt: pkg=libssl-dev state=installed
+     apt: pkg=libssl-dev state=latest
 
    - name: install pip3
-     apt: pkg=python3-pip state=installed
+     apt: pkg=python3-pip state=latest
 
    - name: install libevent-dev
-     apt: pkg=libevent-dev state=installed
+     apt: pkg=libevent-dev state=latest
 
    - name: install libevent-dev
-     apt: pkg=python-all-dev state=installed
+     apt: pkg=python-all-dev state=latest
 
    - name: find pip executable
      shell: "which pip3"

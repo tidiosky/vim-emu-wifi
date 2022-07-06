@@ -74,6 +74,15 @@ class RestApiClient():
                            args.get("name")))
         pp.pprint(response.json())
 
+    def move(self, args):
+        req = {'destination':args.get("dest_datacenter")}
+        response = put("%s/restapi/compute/%s/%s"%
+                        (args.get("endpoint"),
+                        args.get("datacenter"),
+                        args.get("name")),json=req)
+
+        pp.pprint(response.json())
+
     def list(self, args):
 
         list = get('%s/restapi/compute/%s' %
@@ -127,10 +136,11 @@ parser = argparse.ArgumentParser(description="""son-emu-cli compute
     - son-emu-cli compute start -d dc1 -n client -i sonatanfv/sonata-iperf3-vnf -v /home/wifi/db:/db
     - son-emu-cli list
     - son-emu-cli compute status -d dc2 -n client
+    - son-emu-cli compute move -orig dc1 -dest dc3 -n client
     """, formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument(
     "command",
-    choices=['start', 'stop', 'list', 'status', 'xterm'],
+    choices=['start', 'stop', 'move', 'list', 'status', 'xterm'],
     help="Action to be executed.")
 parser.add_argument(
     "vnf_names",
@@ -139,6 +149,17 @@ parser.add_argument(
 parser.add_argument(
     "--datacenter", "-d", dest="datacenter",
     help="Data center to which the command should be applied.")
+        
+parser.add_argument(
+    "--origin", "-orig", dest="origin_datacenter",
+    default="",
+    help="Data center towards which the vnf will be moved, e.g 'dc1'")
+
+parser.add_argument(
+    "--destination", "-dest", dest="dest_datacenter",
+    default="",
+    help="Data center towards which the vnf will be moved, e.g 'dc3'")
+
 parser.add_argument(
     "--name", "-n", dest="name",
     help="Name of compute instance e.g. 'vnf1'.")
@@ -173,19 +194,19 @@ parser.add_argument(
 
 parser.add_argument(
     "--cpu-period", "-cpu-p", dest="cpu_period",
-    default="",
+    default=None,
     help="Specify the CPU CFS scheduler period, which is used alongside --cpu-quota. Defaults to 100000 microseconds (100 milliseconds)."
 )
 
 parser.add_argument(
     "--cpu_quota", "-cpu-q", dest="cpu_quota",
-    default="",
+    default=None,
     help="Impose a CPU CFS quota on the container. The number of microseconds per --cpu-period that the container is limited to before throttled. "
 )
 
 parser.add_argument(
     "--mem-limit", "-mem", dest="mem_limit",
-    default="",
+    default=None,
     help="The maximum amount of memory the container can use."
 )
 
