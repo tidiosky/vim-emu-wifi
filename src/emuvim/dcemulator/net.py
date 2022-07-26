@@ -92,8 +92,8 @@ class DCNetwork(ContainernetWifi):
         self.installed_chains = []
 
         # always cleanup environment before we start the emulator
-        self.killRyu()
-        cleanup()
+        # self.killRyu()
+        # cleanup()
 
         # call original Docker.__init__ and setup default controller
         ContainernetWifi.__init__(
@@ -107,25 +107,26 @@ class DCNetwork(ContainernetWifi):
         else:
             self.failMode = 'secure'
 
-        # # Ryu management
-        # if controller == RemoteController:
-        #     # start Ryu controller
-        #     self.startRyu(learning_switch=enable_ryu_learning)
-
+        # Ryu management
+        if controller == RemoteController:
+            # start Ryu controller
+            self.startRyu(learning_switch=enable_ryu_learning)
+        #
         # add the specified controller
-        self.addController('c0', controller=controller)
-
-        # graph of the complete DC network
+        #
+        self.addController('c2', controller=controller)
+        #
+        # # graph of the complete DC network
         self.DCNetwork_graph = nx.MultiDiGraph()
-
-        # initialize pool of vlan tags to setup the SDN paths
+        #
+        # # initialize pool of vlan tags to setup the SDN paths
         self.vlans = list(range(1, 4095))[::-1]
-
-        # # link to Ryu REST_API
-        # ryu_ip = 'localhost'
-        # ryu_port = '8080'
-        # self.ryu_REST_api = 'http://{0}:{1}'.format(ryu_ip, ryu_port)
-        # self.RyuSession = requests.Session()
+        #
+        # link to Ryu REST_API
+        ryu_ip = 'localhost'
+        ryu_port = '8080'
+        self.ryu_REST_api = 'http://{0}:{1}'.format(ryu_ip, ryu_port)
+        self.RyuSession = requests.Session()
 
         # monitoring agent
         if monitor:
@@ -151,6 +152,7 @@ class DCNetwork(ContainernetWifi):
         dc.create()  # finally create the data center in our Mininet instance
         LOG.info("added data center: %s" % label)
         return dc
+
 
     def addLink(self, node1, node2, **params):
         """
@@ -252,6 +254,8 @@ class DCNetwork(ContainernetWifi):
             node2 = link.intf2.node
         assert node1 is not None
         assert node2 is not None
+        LOG.debug("Net graph before removing link")
+        print(self.DCNetwork_graph)
         ContainernetWifi.removeLink(self, link=link, node1=node1, node2=node2)
         # TODO we might decrease the loglevel to debug:
         try:
@@ -264,6 +268,8 @@ class DCNetwork(ContainernetWifi):
         except BaseException:
             LOG.warning("%s, %s not found in DCNetwork_graph." %
                         ((node1.name, node2.name)))
+        LOG.debug("Net graph after removing link")
+        print(self.DCNetwork_graph)
 
     def addDocker(self, label, **params):
         """
@@ -273,6 +279,17 @@ class DCNetwork(ContainernetWifi):
         return ContainernetWifi.addDocker(
             self, label, cls=EmulatorCompute, **params)
 
+    def addNode(self, label, **params):
+        self.DCNetwork_graph.add_node(label, type=params.get('type', 'docker'))
+    
+    
+    def moveDocker(self, label):
+        """
+        Method for moving a docker running from a dc to anoter dc
+        """
+        self.DCNetwork_graph.remove_node(label)
+    #    self.DCNetwork_graph.add_node(label)
+    
     def removeDocker(self, label, **params):
         """
         Wrapper for removeDocker method to update graph.
@@ -931,8 +948,9 @@ class DCNetwork(ContainernetWifi):
         ryu_rest_app = 'ryu.app.ofctl_rest'
         # change the default Openflow controller port to 6653 (official IANA-assigned port number), as used by Mininet
         # Ryu still uses 6633 as default
+        #update : change the port to 6655 to allow several controller
         ryu_option = '--ofp-tcp-listen-port'
-        ryu_of_port = '6653'
+        ryu_of_port = '6655'
         ryu_cmd = 'ryu-manager'
         FNULL = open("/tmp/ryu.log", 'w')
         if learning_switch:
@@ -1027,3 +1045,9 @@ class DCNetwork(ContainernetWifi):
                     # found the right link and connected switch
                     src_sw_inport_name = link_dict[link]['dst_port_name']
                     return src_sw_inport_name
+    
+    def buildGraph(self):
+        self.DCNetwork_graph = nx.MultiDiGraph()
+        for vnf in self.getAllContainers():
+
+            self.DCNetwork_graph.add_node(vnf.name, type=vnf.params.get('type', 'docker'))
