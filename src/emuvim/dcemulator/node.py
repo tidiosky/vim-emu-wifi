@@ -26,6 +26,8 @@
 
 # Forked and edited on 05-06/2022 to implement more functions by Gustave
 # Eiffel University under EU 5GRail Project
+from operator import ne
+from os import link
 from mininet.node import Docker
 from mininet.link import Link
 from emuvim.dcemulator.resourcemodel import NotEnoughResourcesAvailable
@@ -76,6 +78,8 @@ class EmulatorCompute(Docker):
                          'mac': i.MAC(), 'up': i.isUp(), 'status': i.status(), 'dc_portname': dc_port_name}
             networkStatusList.append(intf_dict)
         return networkStatusList
+    
+    
 
     def getStatus(self):
         """
@@ -264,6 +268,8 @@ class Datacenter(object):
                 network.append(default_net)
 
         env = properties
+        LOG.info("*** ENV VARIABLES PASSED TO THE CONTAINER")
+        print(env)
         properties['VNF_NAME'] = name
         # create the container
         d = self.net.addDocker(
@@ -360,7 +366,6 @@ class Datacenter(object):
             datacenter=self,
             flavor_name=flavor_name,
             environment=env,
-            volumes=[volume],
             **params
         )
 
@@ -417,13 +422,102 @@ class Datacenter(object):
         # remove links
         self.net.removeLink(
             link=None, node1=self.containers[name], node2=self.switch)
-
+        
         # remove container
         self.net.removeDocker("%s" % (name))
         del self.containers[name]
 
         return True
 
+    def moveCompute(self, name, next_dc, netw_list):
+        assert name is not None
+        if name not in self.containers:
+            raise Exception("Container with name %s not found." % name)
+        
+        LOG.debug("Moving compute instance %r from data center %r to data center %r" %
+                  (name, str(self), str(next_dc)))
+        assert isinstance(next_dc,Datacenter)
+        
+        d = self.containers[name]
+        
+        # next_dc.net.moveDocker("%s"%(name))
+        
+        default_net = {"id": "emu0"}
+        if netw_list is None:
+            network = {}
+        else:
+            network = netw_list
+
+        print("Netw list : \n ")
+        print(netw_list)
+
+        if isinstance(network, dict):
+            if len(network) < 1:
+                # create at least one default interface
+                network = default_net
+            # if we have only one network, put it in a list
+            network = [network]
+        if isinstance(network, list):
+            if len(network) < 1:
+                # create at least one default interface
+                network.append(default_net)
+
+        d.datacenter = next_dc
+        next_dc.net.addNode("%s"%(name))
+
+        print("Next DC containers before move : \n")
+        print(next_dc.containers)
+
+        next_dc.containers[name] = d
+        print("Next DC containers after move : \n")
+        print(next_dc.containers)
+        # add link to new dc
+        d = None
+        d = next_dc.containers[name]
+
+        for nw in network:
+            # clean up network configuration (e.g. RTNETLINK does not allow ':'
+            # in intf names
+           
+            next_dc.net.addLink(next_dc.containers[name], next_dc.switch, params1=nw,
+                             cls=Link, intfName1=nw.get('id'))
+            
+        # apply resource limits to container if a resource model is defined
+        if next_dc._resource_model is not None:
+            try:
+                next_dc._resource_model.allocate(d)
+                next_dc._resource_model.write_allocation_log(
+                    d, next_dc.resource_log_path)
+            except NotEnoughResourcesAvailable as ex:
+                LOG.warning(
+                    "Allocation of container %r was blocked by resource model." % name)
+                LOG.info(ex.message)
+                # ensure that we remove the container
+                next_dc.net.removeDocker(name)
+                return None      
+               #  stop the monitored metrics
+        if self.net.monitor_agent is not None:
+            self.net.monitor_agent.stop_metric(name)
+
+        # call resource model and free resources
+        if self._resource_model is not None:
+            self._resource_model.free(self.containers[name])
+            self._resource_model.write_free_log(
+                self.containers[name], self.resource_log_path)
+
+        self.net.moveDocker("%s" % (name))
+        # remove links
+        self.net.removeLink(link=None,
+           node1=self.containers[name], node2=self.switch)
+
+        print("Actual DC containers before move : \n")
+        print(self.containers)
+        self.containers.pop(name)
+        print("Actual DC containers after move : \n")
+        print(self.containers)
+        
+        return d
+        
     def attachExternalSAP(self, sap_name, sap_net, **params):
         extSAP = EmulatorExtSAP(sap_name, sap_net, self, **params)
         # link SAP to the DC switch
