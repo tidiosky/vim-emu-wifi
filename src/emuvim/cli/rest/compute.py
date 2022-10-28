@@ -54,6 +54,7 @@ class RestApiClient():
                'network': args.get("network"),
                'environment': args.get("environment"),
                'volume': args.get("volume"),
+               'cpu_shares': args.get("cpu_shares"),
                'cpu_period': args.get("cpu_period"),
                'cpu_quota': args.get("cpu_quota"),
                'mem_limit': args.get("mem_limit")}
@@ -169,8 +170,9 @@ parser.add_argument(
 parser.add_argument(
     "--dcmd", "-c", dest="docker_command",
     help="Startup command of the container e.g. './start.sh'")
+
 parser.add_argument(
-    "--cpu-percent","-cpu", dest="cpu_percent"
+    "--cpu-percent","-cpu", dest="cpu_percent", default=""
 )
 parser.add_argument(
     "--net", dest="network",
@@ -183,7 +185,7 @@ parser.add_argument(
 
 parser.add_argument(
     "--environment",'-env', dest="environment",
-    default="False",
+    default=None,
     help="Host environment variable to use inside vnfs, e.g., IPERF_SERVER, IPERF_PORT and DB_SERVER.")
 
 parser.add_argument(
@@ -193,20 +195,26 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--cpu-share", "-cpu-share", dest="cpu_shares",
+    default="",
+    help="Specify the CPU Share to set the weight of the CPU used by the container. If not set, the default value is 1024."
+)
+
+parser.add_argument(
     "--cpu-period", "-cpu-p", dest="cpu_period",
-    default=None,
+    default="",
     help="Specify the CPU CFS scheduler period, which is used alongside --cpu-quota. Defaults to 100000 microseconds (100 milliseconds)."
 )
 
 parser.add_argument(
     "--cpu_quota", "-cpu-q", dest="cpu_quota",
-    default=None,
+    default="",
     help="Impose a CPU CFS quota on the container. The number of microseconds per --cpu-period that the container is limited to before throttled. "
 )
 
 parser.add_argument(
     "--mem-limit", "-mem", dest="mem_limit",
-    default=None,
+    default="",
     help="The maximum amount of memory the container can use."
 )
 

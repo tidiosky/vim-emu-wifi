@@ -33,6 +33,8 @@ from flask import request
 import json
 import threading
 
+from psutil import cpu_percent
+
 logging.basicConfig()
 
 CORS_HEADER = {'Access-Control-Allow-Origin': '*'}
@@ -78,9 +80,12 @@ class Compute(Resource):
             command = data.get("docker_command")
             environment = data.get("environment")
             volume = data.get("volume")
+            cpu_shares = int(data.get("cpu_shares"))
             cpu_period = data.get("cpu_period")
             cpu_quota = data.get("cpu_quota")
             mem_limit = data.get("mem_limit")
+            
+            
             # keys = ['volume, cpu_percent']
             # properties = dict.fromkeys(keys, "")
 
@@ -92,27 +97,38 @@ class Compute(Resource):
                     logging.error("No datacenter defined in request.")
                     return "No datacenter defined in request.", 500, CORS_HEADER
 
-                if environment == False :
+                if environment is None:
                     SERVER= os.getenv("SERVER")
                     PORT = os.getenv("PORT")
                     keys = ["SERVER", "PORT"]
                     properties = dict.fromkeys(keys, "")
                     properties["SERVER"] = SERVER
                     properties["PORT"] = PORT
-                    c = dcs.get(dc_label).startComputeR(
+                    if not cpu_quota and not cpu_period :
+                        
+                        
+                        c = dcs.get(dc_label).startComputeShare(
                         compute_name, image=image, command=command, network=nw_list, volume=volume,
-                        cpu_period=cpu_period, cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
-                else:
-                    SERVER= os.getenv("SERVER")
-                    PORT = os.getenv("PORT")
-                    keys = ["SERVER", "PORT"]
-                    properties = dict.fromkeys(keys, "")
-                    properties["SERVER"] = SERVER
-                    properties["PORT"] = PORT
+                        mem_limit=mem_limit, cpu_shares=cpu_shares, properties=properties)
 
-                    c = dcs.get(dc_label).startComputeR(
+                    elif not cpu_shares:
+                        c = dcs.get(dc_label).startComputeQuota(
                         compute_name, image=image, command=command, network=nw_list, volume=volume,
-                        cpu_period=cpu_period, cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
+                        cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
+                    else:
+                        c = dcs.get(dc_label).startCompute(
+                        compute_name, image=image, command=command, network=nw_list, properties=properties)
+                # else:
+                #     SERVER= os.getenv("SERVER")
+                #     PORT = os.getenv("PORT")
+                #     keys = ["SERVER", "PORT"]
+                #     properties = dict.fromkeys(keys, "")
+                #     properties["SERVER"] = SERVER
+                #     properties["PORT"] = PORT
+
+                #     c = dcs.get(dc_label).startComputeR(
+                #         compute_name, image=image, command=command, network=nw_list, volume=volume,
+                #         cpu_period=cpu_period, cpu_quota=cpu_quota, mem_limit=mem_limit, properties=properties)
                 # (if available) trigger emu. entry point given in Dockerfile
                 try:
                     config = c.dcinfo.get("Config", dict())

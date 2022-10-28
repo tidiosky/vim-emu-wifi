@@ -35,7 +35,7 @@ from subprocess import Popen
 from mininet.net import ContainernetWifi
 #from containernet.net import ContainernetWifi
 from mininet.node import OVSSwitch, OVSKernelSwitch, Docker, RemoteController
-from mn_wifi.cli import CLI
+from mininet.cli import CLI
 from mininet.link import TCLink
 from mininet.clean import cleanup
 from emuvim.dcemulator.monitoring import DCNetworkMonitor
